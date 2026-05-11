@@ -27,5 +27,5 @@ curl -X POST \
 ---
   echo "test z userland $(date)" > /tmp/test.txt
 curl -X POST \
-  "https://killaseo.pl/upload.php?key=TWOJ_SEKRET_123&file=test.txt" \
+  "https://killaseo.pl/upload.php?key=yourown_secret_key_herefile=test.txt" \
   --data-binary @/tmp/test.txt
