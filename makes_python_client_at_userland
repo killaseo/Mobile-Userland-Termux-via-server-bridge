@@ -1,0 +1,69 @@
+cat > /usr/local/bin/bridge << 'EOF'
+#!/usr/bin/python3
+import sys, os, subprocess, json, glob
+
+URL  = 'https://your_domain_name_here.com/upload.php'
+KEY  = 'add_yourown_secret_pass_key_here'
+HDR  = f'X-Bridge-Key: {KEY}'
+
+def curl(*args):
+    cmd = ['curl', '-s', '-H', HDR] + list(args)
+    r = subprocess.run(cmd, capture_output=True)
+    return r.stdout, r.returncode
+
+def upload(local, remote=None):
+    remote = remote or os.path.basename(local)
+    out, rc = curl('-X','POST', f'{URL}?file={remote}', '--data-binary', f'@{local}')
+    print(out.decode().strip())
+    return rc == 0
+
+def download(remote, local=None):
+    local = local or remote
+    os.makedirs(os.path.dirname(os.path.abspath(local)), exist_ok=True)
+    out, rc = curl('-o', local, f'{URL}?file={remote}')
+    print(f'{"OK" if rc==0 else "ERR"}: {remote} -> {local}')
+    return rc == 0
+
+def ls_remote():
+    out, _ = curl(URL)
+    try:
+        files = json.loads(out)
+        for f in files: print(f)
+    except:
+        print(out.decode().strip())
+
+def sync_up(pattern, remote_dir=''):
+    files = glob.glob(pattern, recursive=True)
+    if not files: print('Brak plików:', pattern); return
+    ok = err = 0
+    for f in files:
+        name = (remote_dir + '/' if remote_dir else '') + os.path.basename(f)
+        if upload(f, name): ok += 1
+        else: err += 1
+    print(f'Sync: {ok} OK, {err} błędów')
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        print('bridge <up|down|ls|sync> ...')
+        print('  up   <plik> [nazwa]      - wyślij plik')
+        print('  down <nazwa> [lokalny]   - pobierz plik')
+        print('  ls                       - lista na serwerze')
+        print('  sync <wzorzec_glob>      - wyślij wiele plików')
+        sys.exit(0)
+
+    cmd = args[0]
+    if cmd == 'up':
+        upload(args[1], args[2] if len(args)>2 else None)
+    elif cmd == 'down':
+        download(args[1], args[2] if len(args)>2 else None)
+    elif cmd == 'ls':
+        ls_remote()
+    elif cmd == 'sync':
+        sync_up(args[1], args[2] if len(args)>2 else '')
+    else:
+        print('Nieznana komenda:', cmd)
+
+main()
+EOF
+chmod +x /usr/local/bin/bridge
