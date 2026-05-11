@@ -1,0 +1,13 @@
+# upload jednego pliku
+echo "hello $(date)" > /tmp/test.txt
+bridge up /tmp/test.txt
+
+# lista na serwerze
+bridge ls
+
+# pobierz z powrotem
+bridge down test.txt /tmp/test_pobrany.txt
+cat /tmp/test_pobrany.txt
+
+# sync wielu plików naraz (np. wyniki TextGen)
+bridge sync '/home/userland/jakis/katalog/*.json'
