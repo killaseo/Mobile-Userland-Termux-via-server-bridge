@@ -1,0 +1,83 @@
+cat > ~/bridge << 'EOF'
+#!/usr/bin/env python
+import sys, os, subprocess, json, glob
+
+URL  = 'https://killaseo.pl/upload.php'
+KEY  = 'TWOJ_SEKRET_123'
+HDR  = f'X-Bridge-Key: {KEY}'
+
+def curl(*args):
+    cmd = ['curl', '-s', '-H', HDR] + list(args)
+    r = subprocess.run(cmd, capture_output=True)
+    return r.stdout, r.returncode
+
+def upload(local, remote=None):
+    remote = remote or os.path.basename(local)
+    out, rc = curl('-X','POST', f'{URL}?file={remote}', '--data-binary', f'@{local}')
+    print(out.decode().strip())
+    return rc == 0
+
+def download(remote, local=None):
+    local = local or os.path.join('/sdcard/Download', remote)
+    os.makedirs(os.path.dirname(os.path.abspath(local)), exist_ok=True)
+    _, rc = curl('-o', local, f'{URL}?file={remote}')
+    print(f'{"OK" if rc==0 else "ERR"}: {remote} -> {local}')
+    return rc == 0
+
+def ls_remote():
+    out, _ = curl(URL)
+    try:
+        for f in json.loads(out): print(f)
+    except:
+        print(out.decode().strip())
+
+def sync_up(pattern, remote_dir=''):
+    files = glob.glob(pattern, recursive=True)
+    if not files: print('Brak plików:', pattern); return
+    ok = err = 0
+    for f in files:
+        name = (remote_dir + '/' if remote_dir else '') + os.path.basename(f)
+        if upload(f, name): ok += 1
+        else: err += 1
+    print(f'Sync: {ok} OK, {err} błędów')
+
+def sync_down(pattern, local_dir='/sdcard/Download'):
+    out, _ = curl(URL)
+    try:
+        files = [f for f in json.loads(out) if glob.fnmatch.fnmatch(f, pattern)]
+    except:
+        print('Błąd listy'); return
+    ok = err = 0
+    for f in files:
+        if download(f, os.path.join(local_dir, f)): ok += 1
+        else: err += 1
+    print(f'Sync down: {ok} OK, {err} błędów')
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        print('bridge <up|down|ls|sync|syncd> ...')
+        print('  up    <plik> [nazwa]         - wyślij plik na serwer')
+        print('  down  <nazwa> [lokalny]      - pobierz do /sdcard/Download/')
+        print('  ls                           - lista na serwerze')
+        print('  sync  <wzorzec> [remote_dir] - wyślij wiele plików')
+        print('  syncd <wzorzec> [local_dir]  - pobierz wiele plików')
+        sys.exit(0)
+
+    cmd = args[0]
+    if cmd == 'up':
+        upload(args[1], args[2] if len(args)>2 else None)
+    elif cmd == 'down':
+        download(args[1], args[2] if len(args)>2 else None)
+    elif cmd == 'ls':
+        ls_remote()
+    elif cmd == 'sync':
+        sync_up(args[1], args[2] if len(args)>2 else '')
+    elif cmd == 'syncd':
+        sync_down(args[1], args[2] if len(args)>2 else '/sdcard/Download')
+    else:
+        print('Nieznana komenda:', cmd)
+
+main()
+EOF
+chmod +x ~/bridge
